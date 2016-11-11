@@ -189,7 +189,7 @@ public class StringHelperTest {
 	 */
 	@Test
 	public void testToUnderscoreName() throws Exception {
-		//TODO: Test goes here...
+
 	}
 
 	/**
