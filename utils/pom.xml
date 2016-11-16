@@ -101,6 +101,11 @@
             </exclusions>
         </dependency>
 
+        <dependency>
+            <groupId>org.apache.httpcomponents</groupId>
+            <artifactId>httpmime</artifactId>
+        </dependency>
+
         <!-- 日志相关jar包 -->
         <dependency>
             <groupId>org.slf4j</groupId>
@@ -142,6 +147,7 @@
             <groupId>org.hamcrest</groupId>
             <artifactId>hamcrest-all</artifactId>
         </dependency>
+
 
     </dependencies>
 

@@ -1,9 +1,7 @@
 package com.framework.utils;
 
-import org.apache.http.Header;
-import org.apache.http.HttpEntity;
-import org.apache.http.HttpStatus;
-import org.apache.http.NameValuePair;
+import org.apache.http.*;
+import org.apache.http.client.HttpClient;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;
@@ -15,6 +13,9 @@ import org.apache.http.conn.socket.ConnectionSocketFactory;
 import org.apache.http.conn.socket.PlainConnectionSocketFactory;
 import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
 import org.apache.http.entity.StringEntity;
+import org.apache.http.entity.mime.MultipartEntity;
+import org.apache.http.entity.mime.content.FileBody;
+import org.apache.http.entity.mime.content.StringBody;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.client.HttpClients;
@@ -28,6 +29,7 @@ import org.slf4j.LoggerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
+import java.io.File;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.security.cert.CertificateException;
@@ -85,29 +87,34 @@ public class HttpUtil {
 	 * @return
 	 */
 	public static String doGet(String url, Map<String, String> params) throws Exception {
-		String apiUrl = url;
 		String param = doGetParam(params);
-		apiUrl += param;
+		url = url.indexOf("?") > -1 ? url + "&" + param : url + "?" + param;
 		String httpStr = null;
 		CloseableHttpClient httpclient = HttpClientBuilder.create().build();
 		CloseableHttpResponse response = null;
 		try {
-			HttpGet httpGet = new HttpGet(apiUrl);
+			HttpGet httpGet = new HttpGet(url);
 			httpGet.setConfig(requestConfig);
 			response = httpclient.execute(httpGet);
-			httpStr = getResponse(apiUrl, httpStr, response);
+			httpStr = getResponse(url, httpStr, response);
 		} catch (IOException e) {
-			logger.error("HttpClient 调用{}失败", new Object[]{apiUrl}, e);
+			logger.error("请求失败, url = {}", new Object[]{url}, e);
+			throw new RuntimeException("请求失败！url=[" + url + "],请求参数:params:"+JsonUtils.object2String(param), e);
 		} finally {
-			if (response != null) {
-				try {
-					EntityUtils.consume(response.getEntity());
-				} catch (IOException e) {
-					logger.error("HttpClient 调用{}失败", new Object[]{apiUrl}, e);
-				}
-			}
+			closeResponseIO(url, response);
 		}
 		return httpStr;
+	}
+
+	private static void closeResponseIO(String url, CloseableHttpResponse response) {
+		if (response != null) {
+			try {
+				EntityUtils.consume(response.getEntity());
+			} catch (IOException e) {
+				logger.error("关闭Http IO 异常", new Object[]{url}, e);
+				throw new RuntimeException("关闭Http IO 异常");
+			}
+		}
 	}
 
 
@@ -117,7 +124,7 @@ public class HttpUtil {
 	 * @param bean
 	 * @return
 	 */
-	public static String doGetParam(Map<String, String> bean) {
+	private static String doGetParam(Map<String, String> bean) {
 		StringBuilder result = new StringBuilder();
 		Iterator<String> it = bean.keySet().iterator();
 		while (it.hasNext()) {
@@ -147,14 +154,14 @@ public class HttpUtil {
 	/**
 	 * 发送 POST 请求（HTTP），K-V形式
 	 *
-	 * @param apiUrl API接口URL
+	 * @param url API接口URL
 	 * @param params 参数map
 	 * @return
 	 */
-	public static <K, V> String doPost(String apiUrl, Map<K, V> params) throws Exception {
+	public static <K, V> String doPost(String url, Map<K, V> params) throws Exception {
 		CloseableHttpClient httpClient = HttpClients.createDefault();
 		String httpStr = null;
-		HttpPost httpPost = new HttpPost(apiUrl);
+		HttpPost httpPost = new HttpPost();
 		CloseableHttpResponse response = null;
 
 		try {
@@ -166,18 +173,13 @@ public class HttpUtil {
 			}
 			httpPost.setEntity(new UrlEncodedFormEntity(pairList, Charset.forName("UTF-8")));
 			response = httpClient.execute(httpPost);
-			httpStr = getResponse(apiUrl, httpStr, response);
+			httpStr = getResponse(url, httpStr, response);
 
 		} catch (IOException e) {
-			throw new RuntimeException("请求失败！url=（" + apiUrl + "），请求状态码code=" + response.getStatusLine().getStatusCode());
+			logger.error("请求失败, url = {}", new Object[]{url}, e);
+			throw new RuntimeException("请求失败！url=[" + url + "],请求参数:params:"+JsonUtils.object2String(params), e);
 		} finally {
-			if (response != null) {
-				try {
-					EntityUtils.consume(response.getEntity());
-				} catch (IOException e) {
-					logger.error("HttpClient 调用{}失败", new Object[]{apiUrl}, e);
-				}
-			}
+			closeResponseIO(url, response);
 		}
 		return httpStr;
 	}
@@ -190,7 +192,8 @@ public class HttpUtil {
 					httpStr = EntityUtils.toString(resEntity, "utf-8");
 				}
 			} else {
-				throw new RuntimeException("请求失败！url=（" + apiUrl + "），请求状态码code=" + response.getStatusLine().getStatusCode());
+				throw new RuntimeException("请求失败！url=[" + apiUrl + "]，请求状态码code=" + response == null ?
+						null:response.getStatusLine().getStatusCode()+"");
 			}
 		}
 		return httpStr;
@@ -213,7 +216,47 @@ public class HttpUtil {
 		return httpStr;
 	}
 
-	private static String getPostConfig(String apiUrl, String json, CloseableHttpClient httpClient, String httpStr, HttpPost httpPost, CloseableHttpResponse response) {
+
+	/**
+	 * 发送 POST 请求（HTTP），K-V形式
+	 *
+	 * @param apiUrl API接口URL
+	 * @param params 参数map
+	 * @return
+	 */
+	public static String doPost(String apiUrl, Map<String, String> params, File file) throws Exception {
+		String result = "";
+
+		// 对请求的表单域进行填充
+		MultipartEntity reqEntity = new MultipartEntity();
+		reqEntity.addPart("file", new FileBody(file));
+		for (Map.Entry<String, String> entry : params.entrySet()) {
+			if (entry.getValue() != null) {
+				reqEntity.addPart(entry.getKey(), new StringBody(entry.getValue()));
+			}
+		}
+
+		HttpClient httpclient = HttpClients.createDefault();
+		// 请求处理页面
+		HttpPost httppost = new HttpPost(apiUrl);
+		httppost.setConfig(requestConfig);
+		// 设置请求
+		httppost.setEntity(reqEntity);
+		// 执行
+		HttpResponse response = httpclient.execute(httppost);
+
+		if (HttpStatus.SC_OK == response.getStatusLine().getStatusCode()) {
+			HttpEntity entity = response.getEntity();
+			// 显示内容
+			if (entity != null) {
+				result = EntityUtils.toString(entity);
+			}
+		}
+
+		return result;
+	}
+
+	private static String getPostConfig(String url, String json, CloseableHttpClient httpClient, String httpStr, HttpPost httpPost, CloseableHttpResponse response) {
 		try {
 			httpPost.setConfig(requestConfig);
 			StringEntity stringEntity = new StringEntity(json.toString(), "UTF-8");// 解决中文乱码问题
@@ -221,17 +264,12 @@ public class HttpUtil {
 			stringEntity.setContentType("application/json");
 			httpPost.setEntity(stringEntity);
 			response = httpClient.execute(httpPost);
-			httpStr = getResponse(apiUrl, httpStr, response);
+			httpStr = getResponse(url, httpStr, response);
 		} catch (IOException e) {
-			logger.error("HttpClient 调用{}失败", new Object[]{apiUrl}, e);
+			logger.error("请求失败, url = {}", new Object[]{url}, e);
+			throw new RuntimeException("请求失败！url=[" + url + "],请求参数:params:"+JsonUtils.object2String(json), e);
 		} finally {
-			if (response != null) {
-				try {
-					EntityUtils.consume(response.getEntity());
-				} catch (IOException e) {
-					logger.error("HttpClient 调用{}失败", new Object[]{apiUrl}, e);
-				}
-			}
+			closeResponseIO(url, response);
 		}
 		return httpStr;
 	}
@@ -239,13 +277,13 @@ public class HttpUtil {
 	/**
 	 * 发送 SSL POST 请求（HTTPS），K-V形式
 	 *
-	 * @param apiUrl API接口URL
+	 * @param url API接口URL
 	 * @param params 参数map
 	 * @return
 	 */
-	public static String doPostSSL(String apiUrl, Map<String, String> params) {
+	public static String doPostSSL(String url, Map<String, String> params) {
 		CloseableHttpClient httpClient = createSSLHttpClient();
-		HttpPost httpPost = new HttpPost(apiUrl);
+		HttpPost httpPost = new HttpPost(url);
 		CloseableHttpResponse response = null;
 		String httpStr = null;
 
@@ -258,17 +296,12 @@ public class HttpUtil {
 			}
 			httpPost.setEntity(new UrlEncodedFormEntity(pairList, Charset.forName("utf-8")));
 			response = httpClient.execute(httpPost);
-			httpStr = getResponse(apiUrl, httpStr, response);
+			httpStr = getResponse(url, httpStr, response);
 		} catch (Exception e) {
-			logger.error("HttpClient 调用{}失败", new Object[]{apiUrl}, e);
+			logger.error("请求失败, url = {}", new Object[]{url}, e);
+			throw new RuntimeException("请求失败！url=[" + url + "],请求参数:params:"+JsonUtils.object2String(params), e);
 		} finally {
-			if (response != null) {
-				try {
-					EntityUtils.consume(response.getEntity());
-				} catch (IOException e) {
-					logger.error("HttpClient 调用{}失败", new Object[]{apiUrl}, e);
-				}
-			}
+			closeResponseIO(url, response);
 		}
 		return httpStr;
 	}
@@ -284,7 +317,7 @@ public class HttpUtil {
 		CloseableHttpClient httpClient = createSSLHttpClient();
 		String apiUrl = url;
 		String param = doGetParam(params);
-		apiUrl += param;
+		apiUrl = url.indexOf("?") > -1 ? url + "&" + param : url + "?" + param;
 		HttpGet httpGet = new HttpGet(apiUrl);
 		CloseableHttpResponse response = null;
 		String httpStr = null;
@@ -293,16 +326,10 @@ public class HttpUtil {
 			response = httpClient.execute(httpGet);
 			httpStr = getResponse(apiUrl, httpStr, response);
 		} catch (Exception e) {
-			logger.error("HttpClient 调用{}失败", new Object[]{apiUrl}, e);
-			throw new RuntimeException("请求失败！url=（" + apiUrl + "），请求状态码code=" + response.getStatusLine().getStatusCode());
+			logger.error("请求失败, url = {}", new Object[]{apiUrl}, e);
+			throw new RuntimeException("请求失败,url=[" + url + "],请求参数:params:"+JsonUtils.object2String(params), e);
 		} finally {
-			if (response != null) {
-				try {
-					EntityUtils.consume(response.getEntity());
-				} catch (IOException e) {
-					logger.error("HttpClient 调用{}失败", new Object[]{apiUrl}, e);
-				}
-			}
+			closeResponseIO(apiUrl, response);
 		}
 		return httpStr;
 	}
@@ -325,7 +352,7 @@ public class HttpUtil {
 		return httpStr;
 	}
 
-	public static CloseableHttpClient createSSLHttpClient() {
+	private static CloseableHttpClient createSSLHttpClient() {
 		CloseableHttpClient httpClient = null;
 		SSLContext ctx = null;
 		try {
@@ -358,7 +385,7 @@ public class HttpUtil {
 
 		} catch (Exception e) {
 			logger.error("createSSLHttpClient 调用失败", e);
-			throw new RuntimeException("请求失败！createSSLHttpClient 调用失败", e);
+			throw new RuntimeException("请求失败, createSSLHttpClient 调用失败", e);
 		}
 
 		return httpClient;
