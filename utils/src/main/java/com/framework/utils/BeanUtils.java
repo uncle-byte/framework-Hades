@@ -32,7 +32,7 @@ public class BeanUtils extends org.apache.commons.beanutils.BeanUtils {
 
 	static {
 		convertUtilsBean.register(new DateConverter(), Date.class);
-		convertUtilsBean.register(new LongConverter(null), Long.class);
+		convertUtilsBean.register(new LongConverter(), Long.class);
 	}
 
 
