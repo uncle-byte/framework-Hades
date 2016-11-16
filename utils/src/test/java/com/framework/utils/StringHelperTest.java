@@ -190,6 +190,9 @@ public class StringHelperTest {
 	@Test
 	public void testToUnderscoreName() throws Exception {
 
+		String name = StringHelper.toUnderscoreName("personName");
+		System.out.println("name=============="+name);
+
 	}
 
 	/**

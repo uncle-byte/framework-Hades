@@ -138,6 +138,11 @@
             <version>${asm.version}</version>
         </dependency>
 
+        <dependency>
+            <groupId>org.hamcrest</groupId>
+            <artifactId>hamcrest-all</artifactId>
+        </dependency>
+
     </dependencies>
 
 
