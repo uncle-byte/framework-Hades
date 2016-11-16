@@ -37,6 +37,17 @@ public class BeanUtilsTest {
 
     }
 
+    @Test
+    public void testCopyProperties() throws InvocationTargetException, IllegalAccessException {
+        Person person = new Person();
+        person.setId("a");
+        Person person1 = new Person();
+        person1.setName("aaName");
+        BeanUtils.copyProperties(person1,person);
+        System.out.println(person1);
+
+    }
+
 
 
 } 
