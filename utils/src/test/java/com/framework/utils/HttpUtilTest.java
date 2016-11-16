@@ -4,6 +4,10 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.File;
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * HttpUtil Tester. 
  * 
@@ -33,12 +37,15 @@ public class HttpUtilTest {
     } 
     
     /**
-	 * Method: doPost(String apiUrl)
+	 * Method: doPost(String apiUrl) pass
 	 */ 
     @Test
     public void testDoPost() throws Exception {
 		Long start = System.currentTimeMillis();
-		String result = HttpUtil.doGet("http://localhost:8080/whfq-app//common//index.htm");
+		File file = new File("/Users/hai/temp/test.txt");
+		Map fileMap = new HashMap();
+		fileMap.put("file",file);
+		String result = HttpUtil.doPost("http://localhost:8080/fileUpload",new HashMap<>(),fileMap);
 		System.out.println(System.currentTimeMillis() -start /1000);
 		System.out.println(result);
 	}
