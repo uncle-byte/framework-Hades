@@ -12,10 +12,10 @@ import org.apache.http.config.RegistryBuilder;
 import org.apache.http.conn.socket.ConnectionSocketFactory;
 import org.apache.http.conn.socket.PlainConnectionSocketFactory;
 import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
+import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
-import org.apache.http.entity.mime.MultipartEntity;
+import org.apache.http.entity.mime.MultipartEntityBuilder;
 import org.apache.http.entity.mime.content.FileBody;
-import org.apache.http.entity.mime.content.StringBody;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.client.HttpClients;
@@ -47,7 +47,7 @@ public class HttpUtil {
 	public static Logger logger = LoggerFactory.getLogger(HttpUtil.class);
 	private static PoolingHttpClientConnectionManager connMgr;
 	private static RequestConfig requestConfig;
-	//20秒钟超时
+	//30秒钟超时
 	private static final int MAX_TIMEOUT = 30000;
 
 	static {
@@ -99,7 +99,7 @@ public class HttpUtil {
 			httpStr = getResponse(url, httpStr, response);
 		} catch (IOException e) {
 			logger.error("请求失败, url = {}", new Object[]{url}, e);
-			throw new RuntimeException("请求失败！url=[" + url + "],请求参数:params:"+JsonUtils.object2String(param), e);
+			throw new RuntimeException("请求失败！url=[" + url + "],请求参数:params:" + JsonUtils.object2String(param), e);
 		} finally {
 			closeResponseIO(url, response);
 		}
@@ -154,7 +154,7 @@ public class HttpUtil {
 	/**
 	 * 发送 POST 请求（HTTP），K-V形式
 	 *
-	 * @param url API接口URL
+	 * @param url    API接口URL
 	 * @param params 参数map
 	 * @return
 	 */
@@ -177,7 +177,7 @@ public class HttpUtil {
 
 		} catch (IOException e) {
 			logger.error("请求失败, url = {}", new Object[]{url}, e);
-			throw new RuntimeException("请求失败！url=[" + url + "],请求参数:params:"+JsonUtils.object2String(params), e);
+			throw new RuntimeException("请求失败！url=[" + url + "],请求参数:params:" + JsonUtils.object2String(params), e);
 		} finally {
 			closeResponseIO(url, response);
 		}
@@ -193,7 +193,7 @@ public class HttpUtil {
 				}
 			} else {
 				throw new RuntimeException("请求失败！url=[" + apiUrl + "]，请求状态码code=" + response == null ?
-						null:response.getStatusLine().getStatusCode()+"");
+						null : response.getStatusLine().getStatusCode() + "");
 			}
 		}
 		return httpStr;
@@ -228,13 +228,65 @@ public class HttpUtil {
 		String result = "";
 
 		// 对请求的表单域进行填充
-		MultipartEntity reqEntity = new MultipartEntity();
-		reqEntity.addPart("file", new FileBody(file));
+
+		MultipartEntityBuilder builder = MultipartEntityBuilder.create();
+//		MultipartEntity reqEntity = new MultipartEntity();
+		//file
+		builder.addPart("file", new FileBody(file));
+		//param text
 		for (Map.Entry<String, String> entry : params.entrySet()) {
 			if (entry.getValue() != null) {
-				reqEntity.addPart(entry.getKey(), new StringBody(entry.getValue()));
+				builder.addTextBody(entry.getKey(), entry.getValue(), ContentType.TEXT_PLAIN.withCharset("UTF-8"));
 			}
 		}
+		HttpEntity reqEntity = builder.build();
+
+		HttpClient httpclient = HttpClients.createDefault();
+		// 请求处理页面
+		HttpPost httppost = new HttpPost(apiUrl);
+		httppost.setConfig(requestConfig);
+		// 设置请求
+		httppost.setEntity(reqEntity);
+		// 执行
+		HttpResponse response = httpclient.execute(httppost);
+
+		if (HttpStatus.SC_OK == response.getStatusLine().getStatusCode()) {
+			HttpEntity entity = response.getEntity();
+			// 显示内容
+			if (entity != null) {
+				result = EntityUtils.toString(entity);
+			}
+		}
+
+		return result;
+	}
+
+	/**
+	 * 发送 POST 请求（HTTP），K-V形式
+	 *
+	 * @param apiUrl API接口URL
+	 * @param params 参数map
+	 * @return
+	 */
+	public static String doPost(String apiUrl, Map<String, String> params, Map<String, File> files) throws Exception {
+		String result = "";
+		// 对请求的表单域进行填充
+		MultipartEntityBuilder builder = MultipartEntityBuilder.create();
+		//file
+		if (files != null && files.size() > 0) {
+			Set<Map.Entry<String, File>> entries = files.entrySet();
+			for (Map.Entry<String, File> entry : entries) {
+				builder.addPart(entry.getKey(), new FileBody(entry.getValue()));
+			}
+		}
+
+		//param text
+		for (Map.Entry<String, String> entry : params.entrySet()) {
+			if (entry.getValue() != null) {
+				builder.addTextBody(entry.getKey(), entry.getValue(), ContentType.TEXT_PLAIN.withCharset("UTF-8"));
+			}
+		}
+		HttpEntity reqEntity = builder.build();
 
 		HttpClient httpclient = HttpClients.createDefault();
 		// 请求处理页面
@@ -267,7 +319,7 @@ public class HttpUtil {
 			httpStr = getResponse(url, httpStr, response);
 		} catch (IOException e) {
 			logger.error("请求失败, url = {}", new Object[]{url}, e);
-			throw new RuntimeException("请求失败！url=[" + url + "],请求参数:params:"+JsonUtils.object2String(json), e);
+			throw new RuntimeException("请求失败！url=[" + url + "],请求参数:params:" + JsonUtils.object2String(json), e);
 		} finally {
 			closeResponseIO(url, response);
 		}
@@ -277,7 +329,7 @@ public class HttpUtil {
 	/**
 	 * 发送 SSL POST 请求（HTTPS），K-V形式
 	 *
-	 * @param url API接口URL
+	 * @param url    API接口URL
 	 * @param params 参数map
 	 * @return
 	 */
@@ -299,7 +351,7 @@ public class HttpUtil {
 			httpStr = getResponse(url, httpStr, response);
 		} catch (Exception e) {
 			logger.error("请求失败, url = {}", new Object[]{url}, e);
-			throw new RuntimeException("请求失败！url=[" + url + "],请求参数:params:"+JsonUtils.object2String(params), e);
+			throw new RuntimeException("请求失败！url=[" + url + "],请求参数:params:" + JsonUtils.object2String(params), e);
 		} finally {
 			closeResponseIO(url, response);
 		}
@@ -327,7 +379,7 @@ public class HttpUtil {
 			httpStr = getResponse(apiUrl, httpStr, response);
 		} catch (Exception e) {
 			logger.error("请求失败, url = {}", new Object[]{apiUrl}, e);
-			throw new RuntimeException("请求失败,url=[" + url + "],请求参数:params:"+JsonUtils.object2String(params), e);
+			throw new RuntimeException("请求失败,url=[" + url + "],请求参数:params:" + JsonUtils.object2String(params), e);
 		} finally {
 			closeResponseIO(apiUrl, response);
 		}
