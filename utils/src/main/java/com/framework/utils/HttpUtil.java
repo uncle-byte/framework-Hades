@@ -32,10 +32,7 @@ import java.io.IOException;
 import java.nio.charset.Charset;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * HTTP 请求工具类
@@ -77,7 +74,7 @@ public class HttpUtil {
 	 * @return
 	 */
 	public static String doGet(String url) throws Exception {
-		return doGet(url, new HashMap<String, Object>());
+		return doGet(url, new HashMap<String, String>());
 	}
 
 	/**
@@ -87,11 +84,9 @@ public class HttpUtil {
 	 * @param params
 	 * @return
 	 */
-	public static String doGet(String url, Map<String, Object> params) throws Exception {
+	public static String doGet(String url, Map<String, String> params) throws Exception {
 		String apiUrl = url;
-		StringBuffer param = new StringBuffer();
-		int i = 0;
-		doGetParam(params, param, i);
+		String param = doGetParam(params);
 		apiUrl += param;
 		String httpStr = null;
 		CloseableHttpClient httpclient = HttpClientBuilder.create().build();
@@ -115,15 +110,28 @@ public class HttpUtil {
 		return httpStr;
 	}
 
-	private static void doGetParam(Map<String, Object> params, StringBuffer param, int i) {
-		for (String key : params.keySet()) {
-			if (i == 0)
-				param.append("?");
-			else
-				param.append("&");
-			param.append(key).append("=").append(params.get(key));
-			i++;
+
+	/**
+	 * map 转Get 参数
+	 *
+	 * @param bean
+	 * @return
+	 */
+	public static String doGetParam(Map<String, String> bean) {
+		StringBuilder result = new StringBuilder();
+		Iterator<String> it = bean.keySet().iterator();
+		while (it.hasNext()) {
+			String key = it.next();
+			if (key != null && bean.get(key) != null) {
+				result.append(key);
+				result.append("=");
+				result.append(bean.get(key));
+				result.append("&");
+			}
 		}
+		String rl = result.toString();
+		logger.info("参数:" + rl);
+		return rl.endsWith("&") ? rl.substring(0, rl.length() - 1) : rl;
 	}
 
 	/**
@@ -272,15 +280,11 @@ public class HttpUtil {
 	 * @param params 参数map
 	 * @return
 	 */
-	public static String doGetSSL(String url, Map<String, Object> params) throws Exception {
+	public static String doGetSSL(String url, Map<String, String> params) throws Exception {
 		CloseableHttpClient httpClient = createSSLHttpClient();
 		String apiUrl = url;
-		StringBuffer param = new StringBuffer();
-		int i = 0;
-		if (params != null) {
-			doGetParam(params, param, i);
-			apiUrl += param;
-		}
+		String param = doGetParam(params);
+		apiUrl += param;
 		HttpGet httpGet = new HttpGet(apiUrl);
 		CloseableHttpResponse response = null;
 		String httpStr = null;
@@ -317,7 +321,7 @@ public class HttpUtil {
 		CloseableHttpResponse response = null;
 		String httpStr = null;
 
-		httpStr = getPostConfig(apiUrl,json,httpClient,httpStr,httpPost,response);
+		httpStr = getPostConfig(apiUrl, json, httpClient, httpStr, httpPost, response);
 		return httpStr;
 	}
 
