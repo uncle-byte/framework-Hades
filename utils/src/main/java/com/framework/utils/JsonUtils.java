@@ -20,7 +20,7 @@ import java.util.Map;
  * JSON 转换相关的工具类 注意,Map的Key只能为简单类型 ,不可采用复杂类型.
  */
 @SuppressWarnings("unchecked")
-public final class JsonUtils {
+public abstract class JsonUtils {
 
 	private static TypeFactory typeFactory = TypeFactory.defaultInstance();
 
